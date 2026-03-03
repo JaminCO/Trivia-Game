@@ -9,6 +9,8 @@ interface User {
   email: string;
   is_admin: boolean;
   created_at: string;
+  profile_picture: string;
+  coins: number;
 }
 
 interface AuthContextType {

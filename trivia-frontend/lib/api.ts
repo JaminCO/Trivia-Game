@@ -49,6 +49,11 @@ export const matchmakingAPI = {
     });
     return response.data;
   },
+
+  getPlayers: async (roomId: string) => {
+    const response = await apiClient.get(`/matchmaking/rooms/${roomId}/players`);
+    return response.data;
+  },
 };
 
 export default apiClient;

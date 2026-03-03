@@ -48,6 +48,14 @@
 
 :root {
   --radius: 0.625rem;
+  --black: #080808;
+  --white: #f5f0e8;
+  --gold: #e8c84a;
+  --orange: #f06a2b;
+  --green: #3ddc84;
+  --red: #ff3b3b;
+  --dim: #1a1a1a;
+  --border: rgba(245, 240, 232, 0.12);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -63,7 +71,6 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
