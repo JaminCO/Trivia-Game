@@ -476,35 +476,3 @@ Use managed Redis.
 ## Frontend
 
 Deploy to Vercel.
-
----
-
-# 🔴 Daily Execution Rule (Important)
-
-As solo dev, every day:
-
-1. Build feature
-2. Test with **2 browser windows**
-3. Test with **network throttling**
-4. Test reconnect
-5. Commit
-
-No exceptions.
-
----
-
-# 🧠 Senior Engineer Warnings
-
-Do NOT:
-
-* store timers in frontend
-* trust client answers
-* use blocking code in WebSockets
-* skip Redis
-* ignore reconnect logic
-
-These kill multiplayer apps.
-
----
-# 🎉 Conclusion
-Follow this plan step-by-step. Focus on one phase at a time. Test thoroughly. You will have a working multiplayer trivia app in 3 weeks if you stick to this roadmap. Good luck!
