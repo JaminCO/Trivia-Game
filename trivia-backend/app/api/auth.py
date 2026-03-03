@@ -5,12 +5,13 @@ from datetime import timedelta
 
 from ..core.database import get_db
 from ..core.security import create_access_token, decode_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
-from ..schemas.user import UserCreate, UserResponse, TokenResponse, UserLogin
+from ..schemas.user import UserCreate, UserResponse, TokenResponse, UserLogin, UserUpdate
 from ..services.user_service import (
     create_user,
     get_user_by_email,
     authenticate_user,
     get_user_by_id,
+    update_user,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -28,8 +29,14 @@ async def register(user_create: UserCreate, db: AsyncSession = Depends(get_db)):
             detail="Email already registered",
         )
     
-    # Create the user
-    user = await create_user(db, user_create)
+    # Create the user (catch hashing/validation errors and return 400)
+    try:
+        user = await create_user(db, user_create)
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve),
+        )
     
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -108,3 +115,34 @@ async def get_me(
 ):
     """Get current user info."""
     return current_user
+
+@router.put("/me", response_model=UserResponse)
+async def update_me(
+    user_update: UserUpdate,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user info."""
+    user_name = user_update.username
+    user_email = user_update.email
+    if not user_name and not user_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No data provided for update",
+        )
+    
+    # Update user in database
+    try:
+        updated_user = await update_user(
+            db, 
+            int(current_user.id), 
+            user_update
+        )
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve),
+        )
+    return updated_user
+
+@router.

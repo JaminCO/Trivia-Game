@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from .api.auth import router as auth_router
 from .api.matchmaking import router as matchmaking_router
+from .api.ws import router as ws_router
 from .core.redis import init_redis, close_redis
 
 
@@ -30,6 +31,7 @@ app.add_middleware(
 # Routes
 app.include_router(auth_router)
 app.include_router(matchmaking_router)
+app.include_router(ws_router)
 
 
 @app.get("/health")

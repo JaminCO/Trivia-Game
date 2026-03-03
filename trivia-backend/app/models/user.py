@@ -13,3 +13,5 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    profile_picture = Column(String(255), nullable=True, default="default_profile.png")
+    coins = Column(Integer, default=0)

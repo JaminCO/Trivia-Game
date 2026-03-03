@@ -39,3 +39,11 @@ async def join_matchmaking(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to join matchmaking: {str(e)}",
         )
+
+
+@router.get("/rooms/{room_id}/players", response_model=list[int])
+async def get_room_players_http(room_id: str):
+    """Return list of player IDs currently in a redis room set."""
+    from ..services.matchmaking import get_room_players
+    players = await get_room_players(room_id)
+    return players

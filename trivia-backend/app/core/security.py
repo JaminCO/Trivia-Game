@@ -8,7 +8,12 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production-immed
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Prefer Argon2 for new hashes; keep bcrypt_sha256 as a compatible fallback for older hashes
+# Requires: pip install passlib[argon2] argon2-cffi
+pwd_context = CryptContext(
+    schemes=["argon2", "bcrypt_sha256"],
+    deprecated="auto",
+)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -17,6 +22,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+
+def needs_rehash(hashed_password: str) -> bool:
+    """Return True if the given stored hash should be rehashed with current policy."""
+    return pwd_context.needs_update(hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
