@@ -40,3 +40,6 @@ class TokenResponse(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[int] = None
+
+class ProfilePictureUpdate(BaseModel):
+    profile_picture: str
