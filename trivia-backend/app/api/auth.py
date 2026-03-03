@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta
+from fastapi import UploadFile
 
 from ..core.database import get_db
 from ..core.security import create_access_token, decode_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
-from ..schemas.user import UserCreate, UserResponse, TokenResponse, UserLogin, UserUpdate
+from ..schemas.user import UserCreate, UserResponse, TokenResponse, UserLogin, UserUpdate, ProfilePictureUpdate
 from ..services.user_service import (
     create_user,
     get_user_by_email,
@@ -145,4 +146,44 @@ async def update_me(
         )
     return updated_user
 
-@router.
+@router.post("/upload-avatar", response_model=UserResponse)
+async def upload_avatar(
+    file: UploadFile,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload or update user avatar."""
+    file_size_limit = 2 * 1024 * 1024  # 2 MB
+    if file.content_type not in ["image/jpeg", "image/png"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Only JPEG and PNG are allowed.",
+        )
+    if file.size > file_size_limit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds the limit of 2 MB.",
+        )
+    pass  # Placeholder for  actual upload logic
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Avatar upload not implemented yet",
+    )
+
+@router.post("/change-picture")
+async def change_profile_picture(
+    file: ProfilePictureUpdate,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)):
+    try:
+        current_user.profile_picture = file.profile_picture
+        db.add(current_user)
+        await db.commit()
+        await db.refresh(current_user)
+        return current_user
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update profile picture",
+        )
