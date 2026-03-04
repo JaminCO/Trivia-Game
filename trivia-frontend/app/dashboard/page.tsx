@@ -99,7 +99,7 @@ export default function DashboardPage() {
         {/* ── NAV ── */}
         <nav className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 border-b border-white/8 backdrop-blur-xl bg-[#080808]/80 sm:px-10">
           <div className="font-bebas text-[1.5rem] tracking-widest text-[#e8c84a]">
-            Trivia<span className="text-[#f06a2b]">Wars</span>
+            Play<span className="text-[#f06a2b]">Trivia</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 border border-white/10 px-4 py-2">

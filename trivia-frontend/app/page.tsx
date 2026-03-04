@@ -27,6 +27,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../lib/auth";
 
 // ── Sub-components ──────────────────────────────────────────
 
@@ -174,6 +176,13 @@ const PRICING = [
 export default function LandingPage() {
   useReveal();
 
+  const router = useRouter();
+  const { user, loading } = useAuth();
+  const goPlay = () => {
+    if (loading) return;
+    router.push(user ? "/dashboard" : "/login");
+  };
+
   return (
     <div className="bg-[#080808] text-[#f5f0e8] font-syne overflow-x-hidden cursor-none">
       {/* Noise overlay */}
@@ -199,7 +208,7 @@ export default function LandingPage() {
             </a>
           ))}
         </div>
-        <button className="font-mono2 text-[0.72rem] tracking-widest uppercase bg-[#e8c84a] text-[#080808] px-5 py-2.5 hover:bg-[#f06a2b] transition-colors font-medium cursor-none">
+        <button onClick={goPlay} className="font-mono2 text-[0.72rem] tracking-widest uppercase bg-[#e8c84a] text-[#080808] px-5 py-2.5 hover:bg-[#f06a2b] transition-colors font-medium cursor-none">
           Play Now →
         </button>
       </nav>
@@ -242,7 +251,7 @@ export default function LandingPage() {
           </p>
 
           <div className="flex gap-4 mt-12 flex-wrap">
-            <button className="relative font-bebas text-[1.2rem] tracking-widest bg-[#e8c84a] text-[#080808] px-11 py-4 overflow-hidden group cursor-none">
+            <button onClick={goPlay} className="relative font-bebas text-[1.2rem] tracking-widest bg-[#e8c84a] text-[#080808] px-11 py-4 overflow-hidden group cursor-none">
               <span className="absolute inset-0 bg-[#f06a2b] translate-x-[-101%] group-hover:translate-x-0 transition-transform duration-300" />
               <span className="relative z-10">Enter a Room →</span>
             </button>
@@ -461,7 +470,7 @@ export default function LandingPage() {
           Join thousands of players. Real questions. Real money. Real fast.
         </p>
         <div className="flex gap-4 justify-center flex-wrap reveal opacity-0 translate-y-7 transition-all duration-700">
-          <button className="relative font-bebas text-[1.2rem] tracking-widest bg-[#e8c84a] text-[#080808] px-11 py-4 overflow-hidden group cursor-none">
+          <button onClick={goPlay} className="relative font-bebas text-[1.2rem] tracking-widest bg-[#e8c84a] text-[#080808] px-11 py-4 overflow-hidden group cursor-none">
             <span className="absolute inset-0 bg-[#f06a2b] translate-x-[-101%] group-hover:translate-x-0 transition-transform duration-300" />
             <span className="relative z-10">Enter a Room →</span>
           </button>
