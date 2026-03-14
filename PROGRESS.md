@@ -1,14 +1,14 @@
 # Trivia App Development Progress Report
 
-**Date:** March 1, 2026  
-**Status:** Phase 1 (Auth + Database) - COMPLETE  
-**Next Phase:** Phase 2 (Redis Room Engine) - Ready to Begin
+**Date:** March 14, 2026  
+**Status:** Phase 4 (WebSocket Game Loop) - IMPLEMENTED / NEEDS QA  
+**Next Phase:** Phase 4 QA + Frontend UX polish
 
 ---
 
 ## Executive Summary
 
-Successfully completed Phase 1 of the multiplayer trivia application. The authentication system and database infrastructure are now fully functional. Users can register, login, and join matchmaking queues. Ready to move to Phase 2 for real-time lobby synchronization.
+Auth + DB (Phase 1) are complete, Redis matchmaking (Phase 2) is built, and the WebSocket lobby (Phase 3) is connected end-to-end (player join/leave, player list, countdown, and `game_start`). Phase 4 is live server-side: the room WebSocket broadcasts chat messages plus core game events (`question`, `answer_result` with correct answers, `leaderboard`, `game_over`). Frontend currently surfaces these Phase 4 game events as "system messages" inside the room chat feed; the dedicated interactive answering UI (buttons + timer + sending `submit_answer`) still needs to be built/polished. Background tasks (countdown/game loop) use their own DB session to avoid SQLAlchemy async session state errors on disconnect/reconnect.
 
 ---
 
@@ -244,31 +244,32 @@ Axios 1.6.0 (HTTP client)
 - [x] Frontend auth pages
 - [x] Dashboard with category selection
 
-### Phase 2 (READY TO START)
-Tasks to implement:
-- [ ] Redis structure for room state
-- [ ] Matchmaking service refinement
-- [ ] WebSocket infrastructure setup
-- [ ] Room lobby page
-- [ ] Real-time player sync
+### Phase 2 (COMPLETE ✅)
+- [x] Redis room state (room hash, room_players set, category room pools)
+- [x] Matchmaking join + room creation/selection
+- [x] Room status updates in Redis (waiting -> in_progress)
 
-### Phase 3 (FUTURE)
-- WebSocket infrastructure
-- Lobby event system
-- Player connection management
+### Phase 3 (COMPLETE ✅)
+- [x] WebSocket manager + `/ws/room/{room_id}` endpoint
+- [x] Player sync (`players`, `player_joined`, `player_left`)
+- [x] Countdown + `game_start` broadcast
+- [x] Chat history (Redis) + `chat_message` broadcast
 
-### Phase 4 (FUTURE)
-- Game engine
-- Question cycle
-- Answer submission
-- Points calculation
-- Leaderboard
+### Phase 4 (IMPLEMENTED / NEEDS QA)
+- [x] Server-side question loop + timer
+- [x] `question` broadcast (no correct answer)
+- [x] Backend: `submit_answer` handling + scoring
+- [x] `answer_result` broadcast (correct answer + per-player breakdown)
+- [x] `leaderboard` broadcast
+- [x] `game_over` + results persistence (`save_results_to_db`)
+- [ ] Frontend: interactive answering UI (timer + option buttons) that sends `submit_answer`
+- [ ] Frontend: better game presentation (not only chat system messages) + redirect to Results on `game_over`
+- [ ] Multi-client QA (refresh/reconnect edge cases, duplicate WS connections on navigation)
 
-### Phase 5-8 (FUTURE)
-- Admin dashboard
-- Monetization hooks
-- Mobile preparation
-- Deployment
+### Phase 5+ (NEXT)
+- [ ] Admin/analytics polish
+- [ ] Hardening (tests, rate limiting, monitoring)
+- [ ] Deployment plan
 
 ---
 
@@ -448,14 +449,25 @@ trivia-frontend/
 
 ## Conclusion
 
-Phase 1 is completely implemented and ready for testing. The foundation is solid with proper authentication, database schema, and frontend integration. Ready to move to Phase 2 for real-time features.
+Phase 1-3 are complete and Phase 4 is functional server-side. Players can authenticate, join a room, see live player updates, chat, and receive game loop broadcasts (questions, correct answers, and leaderboard updates).
 
-**Key Achievement:** Users can now:
-- Register with email/username/password
-- Login and receive JWT token
-- Access protected dashboard
-- Select game category
-- Trigger matchmaking (backend logic ready)
+**Key Achievement:** End-to-end real-time room flow now includes:
+- Matchmaking -> room join -> WebSocket connect
+- Player sync (`players`, join/leave events)
+- Chat history + live `chat_message` broadcast
+- Game loop events: `question`, `answer_result`, `leaderboard`, `game_over`
 
-**Estimated Timeline for Phase 2:** 2-3 days for WebSocket infrastructure and lobby synchronization.
+**Immediate Focus:** QA + frontend UX polish for the room/game experience (reconnect/refresh behavior, edge cases, visuals).
+
+--- 
+
+## Review Notes (March 14, 2026)
+
+1. **Backend CORS list** – `trivia-backend/app/main.py` now includes `http://localhost:3000`, `http://localhost:3001`, and `http://127.0.0.1:3000` (verified).
+
+2. **Database SSL enforcement** – `trivia-backend/app/core/database.py` passes `connect_args={"ssl": "require"}` unconditionally; consider making this environment-driven for local Docker/Postgres setups.
+
+3. **WebSocket background DB session** – background tasks should not reuse a request-scoped session from `Depends(get_db)`; the game loop/countdown now use their own `AsyncSessionLocal()` to avoid SQLAlchemy async state errors.
+
+4. **Frontend room/chat routes** – `trivia-frontend/app/room/[roomCode]/page.tsx` and `trivia-frontend/app/room/[roomCode]/chat/page.tsx` exist and route correctly; keep an eye on duplicate WebSocket connections during navigation/refresh.
 
