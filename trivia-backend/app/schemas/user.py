@@ -21,7 +21,7 @@ class UserResponse(UserBase):
     id: int
     is_admin: bool
     created_at: datetime
-    profile_picture: str
+    profile_picture: Optional[str] = None
     coins: int
 
     class Config:

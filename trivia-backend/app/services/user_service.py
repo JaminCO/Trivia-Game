@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..models.user import User
+from typing import List
 from ..schemas.user import UserCreate, UserUpdate
 from ..core.security import get_password_hash, verify_password, needs_rehash
 
@@ -62,6 +63,14 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
         pass
 
     return user
+
+async def get_users_by_ids(db: AsyncSession, user_ids: List[int]) -> List[User]:
+    """Batch fetch users by a list of IDs."""
+    if not user_ids:
+        return []
+    result = await db.execute(select(User).where(User.id.in_(user_ids)))
+    return list(result.scalars().all())
+
 
 async def update_user(db: AsyncSession, user_id: int, user_update: UserUpdate) -> User:
     """Update user info."""
