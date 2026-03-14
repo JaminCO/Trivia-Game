@@ -28,7 +28,8 @@ const CONNECTION_LABEL: Record<ConnectionStatus, string> = {
 };
 
 export default function RoomChatPage() {
-  const { roomCode } = useParams();
+  const { roomCode: roomCodeParam } = useParams<{ roomCode: string | string[] }>();
+  const roomCode = Array.isArray(roomCodeParam) ? roomCodeParam[0] : roomCodeParam;
   const router = useRouter();
   const { user, loading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
