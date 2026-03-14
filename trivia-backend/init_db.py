@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Initialize database tables."""
+from dotenv import load_dotenv
+load_dotenv()
+    
 import asyncio
 from sqlalchemy import text
 from app.core.database import engine
@@ -7,7 +10,6 @@ from app.models.user import Base as UserBase
 from app.models.question import Base as QuestionBase
 from app.models.game_room import Base as GameRoomBase
 from app.models.game_result import Base as GameResultBase
-
 
 async def init_db():
     """Create all database tables and add any missing columns.

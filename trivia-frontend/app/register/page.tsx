@@ -27,11 +27,21 @@ export default function RegisterPage() {
 
     setLoading(true);
 
+    function extractError(err: any): string {
+      const detail = err.response?.data?.detail;
+      if (!detail) return "Registration failed. Please try again.";
+      if (typeof detail === "string") return detail;
+      if (Array.isArray(detail)) {
+        return detail.map((e: any) => e.msg || String(e)).join(". ");
+      }
+      return "Registration failed. Please try again.";
+    }
+
     try {
       await register(email, username, password);
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Registration failed. Please try again.");
+      setError(extractError(err));
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
@@ -11,6 +14,7 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     future=True,
+    connect_args={"ssl": "require"}, 
 )
 
 AsyncSessionLocal = async_sessionmaker(

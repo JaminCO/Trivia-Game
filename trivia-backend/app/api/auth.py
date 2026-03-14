@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from datetime import timedelta
 from fastapi import UploadFile
 
@@ -10,6 +11,7 @@ from ..schemas.user import UserCreate, UserResponse, TokenResponse, UserLogin, U
 from ..services.user_service import (
     create_user,
     get_user_by_email,
+    get_user_by_username,
     authenticate_user,
     get_user_by_id,
     update_user,
@@ -29,7 +31,15 @@ async def register(user_create: UserCreate, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
-    
+
+    # Check if username already exists
+    existing_username = await get_user_by_username(db, user_create.username)
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken",
+        )
+
     # Create the user (catch hashing/validation errors and return 400)
     try:
         user = await create_user(db, user_create)
@@ -37,6 +47,11 @@ async def register(user_create: UserCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(ve),
+        )
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already in use",
         )
     
     # Create access token
