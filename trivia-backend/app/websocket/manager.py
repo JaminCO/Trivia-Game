@@ -20,12 +20,27 @@ class ConnectionManager:
                 del self.active_connections[room_id]
 
     async def send_personal_message(self, message: dict, websocket: WebSocket):
+        print(f"WS send personal: {message}")
         await websocket.send_json(message)
 
     async def broadcast(self, room_id: str, message: dict):
         """Send JSON message to every connection in the room."""
-        for connection in self.active_connections.get(room_id, []):
-            await connection.send_json(message)
+        print(f"WS broadcast room={room_id} message={message}")
+        connections = self.active_connections.get(room_id, [])
+        dead: list[WebSocket] = []
+        for connection in connections:
+            try:
+                await connection.send_json(message)
+            except Exception as exc:
+                # Connection already closed; mark for cleanup
+                print(f"WS broadcast failed room={room_id} error={exc}")
+                dead.append(connection)
+        if dead:
+            for conn in dead:
+                if conn in connections:
+                    connections.remove(conn)
+            if not connections:
+                self.active_connections.pop(room_id, None)
 
 
 # global manager instance

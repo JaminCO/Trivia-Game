@@ -1,10 +1,12 @@
 import asyncio
 import json
 import time
+from datetime import datetime
+from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.database import get_db
+from ..core.database import AsyncSessionLocal, get_db
 from ..core.security import decode_access_token
 from ..services.user_service import get_user_by_id, get_users_by_ids
 from ..services.matchmaking import get_room_players, remove_player_from_room, MIN_PLAYERS_FOR_START
@@ -17,6 +19,7 @@ from ..services.game_service import (
     advance_question,
     end_game,
     save_results_to_db,
+    update_game_room_status,
     QUESTION_TIME_LIMIT,
 )
 from ..websocket.manager import manager
@@ -28,19 +31,49 @@ router = APIRouter()
 _countdown_running: set[str] = set()
 _game_running: set[str] = set()
 
+CHAT_HISTORY_CACHE = 100
+
+
+def _chat_key(room_id: str) -> str:
+    return f"room_chat:{room_id}"
+
+
+async def _append_chat_message(room_id: str, message: dict[str, Any]):
+    redis_client = get_redis()
+    await redis_client.rpush(_chat_key(room_id), json.dumps(message))
+    await redis_client.ltrim(_chat_key(room_id), -CHAT_HISTORY_CACHE, -1)
+
+
+async def _load_chat_history(room_id: str) -> list[dict[str, Any]]:
+    redis_client = get_redis()
+    raw = await redis_client.lrange(_chat_key(room_id), 0, -1)
+    return [json.loads(item) for item in raw]
+
+
+async def _launch_game_loop(room_id: str):
+    """Start the game loop if not already running."""
+    if room_id in _game_running:
+        return
+    redis_client = get_redis()
+    room_data = await redis_client.hgetall(f"room:{room_id}")
+    print(f"Launching game loop for room {room_id} with data {room_data}")
+    category = room_data.get("category", "general") if room_data else "general"
+    asyncio.create_task(_run_game_loop(room_id, category))
+
 
 async def _run_countdown(room_id: str, seconds: int = 10):
-    """Broadcast countdown ticks then trigger game start."""
+    """Broadcast countdown ticks then trigger game start and launch the loop."""
     try:
         for remaining in range(seconds, 0, -1):
             await manager.broadcast(room_id, {"event": "countdown", "seconds_left": remaining})
             await asyncio.sleep(1)
         await manager.broadcast(room_id, {"event": "game_start", "room_id": room_id})
+        await _launch_game_loop(room_id)
     finally:
         _countdown_running.discard(room_id)
 
 
-async def _run_game_loop(room_id: str, category: str, db: AsyncSession):
+async def _run_game_loop(room_id: str, category: str):
     """
     Server-side question cycle for a game room.
     Runs fully on the server; clients receive events via WebSocket.
@@ -50,78 +83,92 @@ async def _run_game_loop(room_id: str, category: str, db: AsyncSession):
     _game_running.add(room_id)
 
     try:
-        questions = await get_questions_for_room(room_id, category, db)
-        if not questions:
-            await manager.broadcast(room_id, {"event": "error", "message": "No questions found for this category"})
-            return
+        # This task is intentionally decoupled from any request-scoped DB session (e.g., WebSocket Depends(get_db)).
+        # A background task can outlive a client connection; using a request-scoped session can cause concurrent
+        # commit/close state errors when the dependency context exits.
+        async with AsyncSessionLocal() as db:
+            try:
+                questions = await get_questions_for_room(room_id, category, db)
+                if not questions:
+                    await manager.broadcast(room_id, {"event": "error", "message": "No questions found for this category"})
+                    return
 
-        await start_game(room_id)
-        total_questions = len(questions)
+                # Mark room as in-progress in Redis and remove it from the category pool so new players can't join.
+                redis_client = get_redis()
+                await redis_client.hset(f"room:{room_id}", mapping={"status": "in_progress"})
+                room_data = await redis_client.hgetall(f"room:{room_id}")
+                category_for_pool = room_data.get("category") or category
+                if category_for_pool:
+                    await redis_client.srem(f"category_rooms:{category_for_pool}", room_id)
 
-        for q_index, question in enumerate(questions):
-            question_start = time.time()
+                await start_game(room_id)
+                await update_game_room_status(room_id, db, "in_progress")
+                total_questions = len(questions)
 
-            # Send question WITHOUT correct answer
-            await manager.broadcast(room_id, {
-                "event": "question",
-                "question_index": q_index,
-                "total_questions": total_questions,
-                "question_text": question["question_text"],
-                "option_a": question["option_a"],
-                "option_b": question["option_b"],
-                "option_c": question["option_c"],
-                "option_d": question["option_d"],
-                "difficulty": question["difficulty"],
-                "time_limit": QUESTION_TIME_LIMIT,
-            })
+                for q_index, question in enumerate(questions):
+                    question_start = time.time()
 
-            # Wait for time limit, polling every second
-            for _ in range(QUESTION_TIME_LIMIT):
-                await asyncio.sleep(1)
-                # Check if all players have answered
-                player_ids = await get_room_players(room_id)
-                if player_ids:
+                    # Send question WITHOUT correct answer
+                    await manager.broadcast(room_id, {
+                        "event": "question",
+                        "question_index": q_index,
+                        "total_questions": total_questions,
+                        "question_text": question["question_text"],
+                        "option_a": question["option_a"],
+                        "option_b": question["option_b"],
+                        "option_c": question["option_c"],
+                        "option_d": question["option_d"],
+                        "difficulty": question["difficulty"],
+                        "time_limit": QUESTION_TIME_LIMIT,
+                    })
+
+                    # Wait for time limit, polling every second
+                    for _ in range(QUESTION_TIME_LIMIT):
+                        await asyncio.sleep(1)
+                        # Check if all players have answered
+                        player_ids = await get_room_players(room_id)
+                        if player_ids:
+                            answers = await get_question_answers(room_id, q_index)
+                            if len(answers) >= len(player_ids):
+                                break  # All answered early
+
+                    # Reveal correct answer and per-player score breakdown
                     answers = await get_question_answers(room_id, q_index)
-                    if len(answers) >= len(player_ids):
-                        break  # All answered early
+                    answer_breakdown = {
+                        uid: {"answer": data["answer"], "correct": data["correct"], "score": data["score"]}
+                        for uid, data in answers.items()
+                    }
+                    await manager.broadcast(room_id, {
+                        "event": "answer_result",
+                        "question_index": q_index,
+                        "correct_answer": question["correct_answer"],
+                        "answers": answer_breakdown,
+                    })
 
-            # Reveal correct answer and per-player score breakdown
-            answers = await get_question_answers(room_id, q_index)
-            answer_breakdown = {
-                uid: {"answer": data["answer"], "correct": data["correct"], "score": data["score"]}
-                for uid, data in answers.items()
-            }
-            await manager.broadcast(room_id, {
-                "event": "answer_result",
-                "question_index": q_index,
-                "correct_answer": question["correct_answer"],
-                "answers": answer_breakdown,
-            })
+                    # Send updated leaderboard
+                    leaderboard = await get_leaderboard(room_id, db)
+                    await manager.broadcast(room_id, {
+                        "event": "leaderboard",
+                        "leaderboard": leaderboard,
+                    })
 
-            # Send updated leaderboard
-            leaderboard = await get_leaderboard(room_id, db)
-            await manager.broadcast(room_id, {
-                "event": "leaderboard",
-                "leaderboard": leaderboard,
-            })
+                    # Pause before next question (skip pause after last question)
+                    if q_index < total_questions - 1:
+                        await asyncio.sleep(3)
 
-            # Pause before next question (skip pause after last question)
-            if q_index < total_questions - 1:
-                await asyncio.sleep(3)
+                # Game over
+                await end_game(room_id)
+                final_leaderboard = await get_leaderboard(room_id, db)
+                await save_results_to_db(room_id, db)
 
-        # Game over
-        await end_game(room_id)
-        final_leaderboard = await get_leaderboard(room_id, db)
-        await save_results_to_db(room_id, db)
+                await manager.broadcast(room_id, {
+                    "event": "game_over",
+                    "leaderboard": final_leaderboard,
+                })
 
-        await manager.broadcast(room_id, {
-            "event": "game_over",
-            "leaderboard": final_leaderboard,
-        })
-
-    except Exception as e:
-        await manager.broadcast(room_id, {"event": "error", "message": "Game loop error"})
-        raise
+            except Exception:
+                await manager.broadcast(room_id, {"event": "error", "message": "Game loop error"})
+                raise
     finally:
         _game_running.discard(room_id)
 
@@ -152,11 +199,32 @@ async def websocket_room(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
+    # Ensure Redis state has this player in the room set (covers direct WS joins)
+    redis_client = get_redis()
+    await redis_client.sadd(f"room_players:{room_id}", str(user.id))
+    # Bootstrap room metadata if missing so status checks work
+    room_meta = await redis_client.hgetall(f"room:{room_id}")
+    if not room_meta:
+        await redis_client.hset(
+            f"room:{room_id}",
+            mapping={
+                "room_id": room_id,
+                "status": "waiting",
+                "category": room_meta.get("category", "general") if room_meta else "general",
+            },
+        )
+
+    print(f"WS connect room={room_id} user_id={user.id}")
     await manager.connect(room_id, websocket)
 
     # Send current player list only to the newly connected client
     players = await _resolve_players(db, room_id)
     await manager.send_personal_message({"event": "players", "players": players}, websocket)
+
+    # Send chat history (if any) to the newcomer
+    history = await _load_chat_history(room_id)
+    if history:
+        await manager.send_personal_message({"event": "chat_history", "messages": history}, websocket)
 
     # Broadcast to everyone that this player joined
     await manager.broadcast(room_id, {"event": "player_joined", "user_id": user.id, "username": user.username})
@@ -169,18 +237,28 @@ async def websocket_room(
     try:
         while True:
             data = await websocket.receive_json()
+            print(f"WS recv room={room_id} user_id={user.id} payload={data}")
             evt = data.get("event")
 
             if evt == "ready":
                 await manager.broadcast(room_id, {"event": "player_ready", "user_id": user.id})
 
+            elif evt == "send_message":
+                text = (data.get("text") or "").strip()
+                if not text:
+                    continue
+                message = {
+                    "user_id": user.id,
+                    "username": user.username,
+                    "text": text,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+                await _append_chat_message(room_id, message)
+                await manager.broadcast(room_id, {"event": "chat_message", "message": message})
+
             elif evt == "game_started":
-                # Frontend confirms the game started; begin game loop if not already running
-                redis_client = get_redis()
-                room_data = await redis_client.hgetall(f"room:{room_id}")
-                category = room_data.get("category", "general")
-                if room_id not in _game_running:
-                    asyncio.create_task(_run_game_loop(room_id, category, db))
+                # Frontend confirms the game started; start loop if not already running
+                await _launch_game_loop(room_id)
 
             elif evt == "submit_answer":
                 question_index = data.get("question_index")
@@ -210,3 +288,4 @@ async def websocket_room(
         await manager.broadcast(room_id, {"event": "player_left", "user_id": user.id})
         updated_players = await _resolve_players(db, room_id)
         await manager.broadcast(room_id, {"event": "players", "players": updated_players})
+        print(f"WS disconnect room={room_id} user_id={user.id}")
