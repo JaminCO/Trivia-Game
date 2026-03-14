@@ -49,6 +49,21 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const [selectedGameMode, setSelectedGameMode] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState("");
+
+  const handleJoin = async () => {
+    if (!selectedGameMode) return;
+    setJoining(true);
+    setJoinError("");
+    try {
+      const result = await matchmakingAPI.join(selectedGameMode);
+      router.push(`/room/${result.room_id}`);
+    } catch (err: any) {
+      setJoinError(err?.response?.data?.detail ?? "Failed to join. Please try again.");
+      setJoining(false);
+    }
+  };
 
   if (!loading && !user) {
     router.push("/login");
@@ -226,20 +241,25 @@ export default function DashboardPage() {
               })}
             </div>
 
+            {joinError && (
+              <p className="mt-2 font-mono2 text-[0.68rem] tracking-widest text-red-400">{joinError}</p>
+            )}
             <button
-              disabled={!selectedGameMode}
+              disabled={!selectedGameMode || joining}
+              onClick={handleJoin}
               className={`mt-0.5 w-full relative overflow-hidden font-bebas text-[1.3rem] tracking-widest py-5 transition-all duration-200 group ${
-                selectedGameMode
+                selectedGameMode && !joining
                   ? "bg-[#e8c84a] text-[#080808] hover:bg-[#f06a2b]"
                   : "bg-white/5 text-white/20 cursor-not-allowed"
               }`}
             >
-              {selectedGameMode ? (
-                <>
-                  <span className="relative z-10">
-                    Enter {selectedMode?.name} →
-                  </span>
-                </>
+              {joining ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="inline-block h-4 w-4 rounded-full border-2 border-[#080808] border-t-transparent animate-spin" />
+                  Finding room...
+                </span>
+              ) : selectedGameMode ? (
+                <span className="relative z-10">Enter {selectedMode?.name} →</span>
               ) : (
                 "Select a mode to play"
               )}

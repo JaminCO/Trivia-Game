@@ -56,4 +56,11 @@ export const matchmakingAPI = {
   },
 };
 
+export const gameAPI = {
+  getResults: async (roomId: string) => {
+    const response = await apiClient.get(`/game/${roomId}/results`);
+    return response.data;
+  },
+};
+
 export default apiClient;
