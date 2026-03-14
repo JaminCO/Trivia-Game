@@ -12,6 +12,11 @@ Target: **working MVP in ~3 weeks**
 
 ---
 
+**Current Phase (as of Mar 14, 2026): Phase 3 — WebSocket lobby & countdown (in progress).**  
+Phase 0–1 are complete (auth + DB). Phase 2 Redis matchmaking core is implemented. Phase 3 live lobby/WS and Phase 4 question loop are partially running; chat UI exists and redirects after countdown, pending polish.
+
+---
+
 # 🏁 PHASE 0 — Project Setup (Day 0–1)
 
 ## 🎯 Goal

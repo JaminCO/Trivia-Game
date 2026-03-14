@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert
 
@@ -136,6 +137,7 @@ async def end_game(room_id: str):
     """Mark game as finished in Redis."""
     redis_client = get_redis()
     await redis_client.hset(f"game:{room_id}", "status", "finished")
+    await redis_client.hset(f"room:{room_id}", "status", "finished")
 
 
 async def save_results_to_db(room_id: str, db: AsyncSession):
@@ -143,10 +145,7 @@ async def save_results_to_db(room_id: str, db: AsyncSession):
     leaderboard = await get_leaderboard(room_id, db)
 
     # Mark room as finished in DB
-    result = await db.execute(select(GameRoom).where(GameRoom.room_code == room_id))
-    room = result.scalar_one_or_none()
-    if room:
-        room.status = "finished"
+    await update_game_room_status(room_id, db, "finished")
 
     for entry in leaderboard:
         game_result = GameResult(
@@ -180,3 +179,18 @@ async def get_final_results(room_id: str, db: AsyncSession) -> list[dict]:
         {"rank": gr.rank, "user_id": gr.user_id, "username": u.username, "score": gr.final_score}
         for gr, u in rows
     ]
+
+
+async def update_game_room_status(room_id: str, db: AsyncSession, status: str, finished_at: datetime | None = None):
+    """Update the persistent game room status."""
+    result = await db.execute(select(GameRoom).where(GameRoom.room_code == room_id))
+    room = result.scalar_one_or_none()
+    if not room:
+        return
+
+    room.status = status
+    if status == "finished":
+        room.finished_at = finished_at or datetime.utcnow()
+
+    db.add(room)
+    await db.commit()

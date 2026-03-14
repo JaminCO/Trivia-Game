@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { matchmakingAPI } from "@/lib/api";
-import Image from "next/image";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -26,23 +25,6 @@ const GAME_MODES = [
   },
 ];
 
-const PROJECT_UPDATES = [
-  { date: "2026-03-03", status: "Done",        title: "User Accounts & Auth",     details: "Users can register, log in, and receive a secure session token." },
-  { date: "2026-03-03", status: "Done",        title: "Frontend Design",           details: "Login and registration pages are styled and ready for user testing." },
-  { date: "2026-03-03", status: "Done",        title: "Database Setup",            details: "Database models are in place; initial table creation script added." },
-  { date: "2026-03-03", status: "In Progress", title: "Matchmaking Service",       details: "Player matching and room creation logic is being tested." },
-  { date: "Planned",    status: "Next",        title: "Live Lobby (Real-time)",    details: "Real-time room lobby and player readiness (WebSockets)." },
-  { date: "Planned",    status: "Next",        title: "Game Engine",               details: "Question delivery, scoring, and results flow." },
-];
-
-// ─── Status badge config ─────────────────────────────────────────────────────
-
-const STATUS_STYLE: Record<string, { dot: string; label: string; border: string; text: string }> = {
-  Done:        { dot: "bg-[#3ddc84]", label: "text-[#3ddc84]",  border: "border-[#3ddc84]/20",  text: "DONE" },
-  "In Progress":{ dot: "bg-[#e8c84a]", label: "text-[#e8c84a]", border: "border-[#e8c84a]/20",  text: "IN PROGRESS" },
-  Next:        { dot: "bg-white/20",  label: "text-white/30",   border: "border-white/8",        text: "NEXT" },
-};
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -51,6 +33,12 @@ export default function DashboardPage() {
   const [selectedGameMode, setSelectedGameMode] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
 
   const handleJoin = async () => {
     if (!selectedGameMode) return;
@@ -66,7 +54,6 @@ export default function DashboardPage() {
   };
 
   if (!loading && !user) {
-    router.push("/login");
     return null;
   }
 
@@ -82,8 +69,6 @@ export default function DashboardPage() {
   }
 
   const selectedMode = GAME_MODES.find((m) => m.id === selectedGameMode);
-  const doneCount = PROJECT_UPDATES.filter((u) => u.status === "Done").length;
-  const progressPct = Math.round((doneCount / PROJECT_UPDATES.length) * 100);
 
   return (
     <>
@@ -91,8 +76,6 @@ export default function DashboardPage() {
       <style>{`
         @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-20px,30px)} }
         @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(20px,-20px)} }
-        @keyframes barGrow { from{width:0} to{width:${progressPct}%} }
-        .bar-animate { animation: barGrow 1.2s ease-out forwards; }
       `}</style>
 
       <main className="relative min-h-screen bg-[#080808] text-[#f5f0e8] font-syne overflow-x-hidden">
@@ -264,61 +247,6 @@ export default function DashboardPage() {
                 "Select a mode to play"
               )}
             </button>
-          </section>
-
-          {/* ── PROJECT PROGRESS ── */}
-          <section className="border border-white/8 p-8 sm:p-10">
-            <div className="flex items-start justify-between mb-8 flex-wrap gap-4">
-              <div>
-                <p className="font-mono2 text-[0.62rem] tracking-[0.2em] uppercase text-[#f06a2b] mb-2">Dev Log</p>
-                <h2 className="font-bebas text-[1.8rem] sm:text-[2.4rem] leading-none tracking-wide">
-                  Project Progress
-                </h2>
-              </div>
-              {/* Progress bar block */}
-              <div className="min-w-[160px]">
-                <div className="flex justify-between items-baseline mb-2">
-                  <span className="font-mono2 text-[0.58rem] tracking-widest uppercase text-white/30">Build complete</span>
-                  <span className="font-bebas text-[1.4rem] text-[#e8c84a] leading-none">{progressPct}%</span>
-                </div>
-                <div className="h-1 bg-white/8 rounded overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#e8c84a] to-[#3ddc84] bar-animate rounded"
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-0.5">
-              {PROJECT_UPDATES.map((update, idx) => {
-                const s = STATUS_STYLE[update.status] ?? STATUS_STYLE["Next"];
-                return (
-                  <div
-                    key={idx}
-                    className={`flex gap-4 items-start border ${s.border} bg-white/[0.02] p-5 hover:bg-white/[0.04] transition-colors`}
-                  >
-                    {/* Status dot + label */}
-                    <div className="flex flex-col items-center gap-1.5 pt-0.5 min-w-[72px]">
-                      <div className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                      <span className={`font-mono2 text-[0.52rem] tracking-[0.12em] uppercase ${s.label} text-center leading-tight`}>
-                        {s.text}
-                      </span>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <h3 className="font-syne font-bold text-[0.95rem] text-[#f5f0e8]">{update.title}</h3>
-                        <span className="font-mono2 text-[0.58rem] tracking-widest text-white/25 flex-shrink-0">
-                          {update.date}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-[0.82rem] leading-[1.6] text-white/40">{update.details}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </section>
 
           {/* ── QUICK LINKS ── */}

@@ -19,7 +19,9 @@ async def get_questions_for_room(
     # Return cached questions if already loaded
     cached = await redis_client.get(cache_key)
     if cached:
-        return json.loads(cached)
+        cached_list = json.loads(cached)
+        if cached_list:
+            return cached_list
 
     # Query random questions from DB
     result = await db.execute(
@@ -30,19 +32,34 @@ async def get_questions_for_room(
     )
     questions = result.scalars().all()
 
-    question_list = [
-        {
-            "id": q.id,
-            "question_text": q.question_text,
-            "option_a": q.option_a,
-            "option_b": q.option_b,
-            "option_c": q.option_c,
-            "option_d": q.option_d,
-            "correct_answer": q.correct_answer,  # stored server-side only
-            "difficulty": q.difficulty,
-        }
-        for q in questions
-    ]
+    # Fallback question to keep the game loop running even if DB is empty
+    if not questions:
+        question_list = [
+            {
+                "id": -1,
+                "question_text": "Fallback: What is 2 + 2?",
+                "option_a": "3",
+                "option_b": "4",
+                "option_c": "5",
+                "option_d": "22",
+                "correct_answer": "B",
+                "difficulty": "easy",
+            }
+        ]
+    else:
+        question_list = [
+            {
+                "id": q.id,
+                "question_text": q.question_text,
+                "option_a": q.option_a,
+                "option_b": q.option_b,
+                "option_c": q.option_c,
+                "option_d": q.option_d,
+                "correct_answer": q.correct_answer,  # stored server-side only
+                "difficulty": q.difficulty,
+            }
+            for q in questions
+        ]
 
     # Cache for 2 hours
     await redis_client.set(cache_key, json.dumps(question_list), ex=7200)
