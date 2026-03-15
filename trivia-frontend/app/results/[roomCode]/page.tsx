@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { gameAPI } from "@/lib/api";
 
@@ -14,8 +14,9 @@ interface ResultEntry {
 
 const RANK_ICONS: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
-export default function ResultsPage({ params }: { params: { roomCode: string } }) {
-  const { roomCode } = params;
+export default function ResultsPage() {
+  const { roomCode: roomCodeParam } = useParams<{ roomCode: string | string[] }>();
+  const roomCode = Array.isArray(roomCodeParam) ? roomCodeParam[0] : roomCodeParam;
   const router = useRouter();
   const { user, loading } = useAuth();
 
@@ -23,15 +24,46 @@ export default function ResultsPage({ params }: { params: { roomCode: string } }
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
 
+  const fetchResults = useCallback(async () => {
+    if (!roomCode) return;
+    setFetching(true);
+    setFetchError(null);
+    try {
+      const data = await gameAPI.getResults(roomCode);
+      setResults(data.results ?? []);
+    } catch {
+      setFetchError("Could not load results. The game may still be processing.");
+    } finally {
+      setFetching(false);
+    }
+  }, [roomCode]);
+
   useEffect(() => {
     if (loading) return;
-    if (!user) { router.push("/login"); return; }
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    fetchResults();
+  }, [loading, user, router, fetchResults]);
 
-    gameAPI.getResults(roomCode)
-      .then((data) => setResults(data.results ?? []))
-      .catch(() => setFetchError("Could not load results. The game may still be processing."))
-      .finally(() => setFetching(false));
-  }, [loading, user, roomCode]);
+  if (!roomCode) {
+    return (
+      <main className="relative min-h-screen bg-[#080808] text-[#f5f0e8] font-syne flex items-center justify-center px-4 py-8">
+        <div className="border border-white/10 px-6 py-8 text-center relative w-full max-w-xl">
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#e8c84a] to-transparent" />
+          <p className="font-mono2 text-[0.62rem] tracking-[0.2em] uppercase text-white/30 mb-2">Results</p>
+          <h1 className="font-bebas text-[2.4rem] tracking-widest text-[#e8c84a]">Missing room code</h1>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="mt-6 font-bebas text-[1.2rem] tracking-widest py-3 px-6 bg-[#e8c84a] text-[#080808] hover:bg-[#f06a2b] transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   const myEntry = results.find((e) => e.user_id === user?.id);
   const winner = results[0];
@@ -63,7 +95,15 @@ export default function ResultsPage({ params }: { params: { roomCode: string } }
             </p>
           )}
           {fetchError && (
-            <p className="font-mono2 text-[0.68rem] tracking-widest text-red-400/70 text-center py-6">{fetchError}</p>
+            <div className="py-6 text-center space-y-4">
+              <p className="font-mono2 text-[0.68rem] tracking-widest text-red-400/70">{fetchError}</p>
+              <button
+                onClick={fetchResults}
+                className="font-mono2 text-[0.62rem] tracking-[0.25em] uppercase border border-white/15 px-4 py-2 text-white/60 hover:border-white/35 hover:text-white/80 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
           )}
           {!fetching && !fetchError && results.length === 0 && (
             <p className="font-mono2 text-[0.68rem] tracking-widest text-white/30 text-center py-6">No results found.</p>
