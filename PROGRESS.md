@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Auth + DB (Phase 1) are complete, Redis matchmaking (Phase 2) is built, and the WebSocket lobby (Phase 3) is connected end-to-end (player join/leave, player list, countdown, and `game_start`). Phase 4 is live server-side: the room WebSocket broadcasts chat messages plus core game events (`question`, `answer_result` with correct answers, `leaderboard`, `game_over`). Frontend currently surfaces these Phase 4 game events as "system messages" inside the room chat feed; the dedicated interactive answering UI (buttons + timer + sending `submit_answer`) still needs to be built/polished. Background tasks (countdown/game loop) use their own DB session to avoid SQLAlchemy async session state errors on disconnect/reconnect.
+Auth + DB (Phase 1) are complete, Redis matchmaking (Phase 2) is built, and the WebSocket lobby (Phase 3) is connected end-to-end (player join/leave, player list, countdown, and `game_start`). Phase 4 is live end-to-end: the room WebSocket broadcasts chat messages plus core game events (`question`, `answer_result` with correct answers, `leaderboard`, `game_over`), and the frontend chat page now provides a Telegram-style experience with a pinned game panel (timer + A/B/C/D buttons sending `submit_answer`) while the game bot posts events into the chat feed. Background tasks (countdown/game loop) use their own DB session to avoid SQLAlchemy async session state errors on disconnect/reconnect.
 
 ---
 
@@ -262,8 +262,8 @@ Axios 1.6.0 (HTTP client)
 - [x] `answer_result` broadcast (correct answer + per-player breakdown)
 - [x] `leaderboard` broadcast
 - [x] `game_over` + results persistence (`save_results_to_db`)
-- [ ] Frontend: interactive answering UI (timer + option buttons) that sends `submit_answer`
-- [ ] Frontend: better game presentation (not only chat system messages) + redirect to Results on `game_over`
+- [x] Frontend: interactive answering UI (timer + option buttons) that sends `submit_answer` (inside room chat)
+- [x] Frontend: Telegram-style game presentation (pinned game panel + leaderboard + results CTA on `game_over`)
 - [ ] Multi-client QA (refresh/reconnect edge cases, duplicate WS connections on navigation)
 
 ### Phase 5+ (NEXT)
